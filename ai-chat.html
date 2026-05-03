@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Chat - MiMo & DeepSeek</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root {
+    --bg-primary: #0a0a0f;
+    --bg-secondary: #12121a;
+    --bg-card: #1a1a26;
+    --bg-input: #1e1e2e;
+    --text-primary: #e8e8ed;
+    --text-secondary: #9898a8;
+    --accent-mimo: #ff6900;
+    --accent-mimo-glow: rgba(255, 105, 0, 0.3);
+    --accent-ds: #3b82f6;
+    --accent-ds-glow: rgba(59, 130, 246, 0.3);
+    --border: #252536;
+    --glass-bg: rgba(26, 26, 38, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.06);
+    --glass-blur: blur(20px);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .bg-grid {
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .bg-orb {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(120px);
+    opacity: 0.15;
+    pointer-events: none;
+    z-index: 0;
+    transition: all 0.8s ease;
+  }
+  .bg-orb.mimo { background: var(--accent-mimo); width: 500px; height: 500px; top: -150px; right: -150px; }
+  .bg-orb.ds { background: var(--accent-ds); width: 500px; height: 500px; bottom: -150px; left: -150px; }
+
+  .app-container {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 800px;
+    height: 100vh;
+    max-height: 900px;
+    display: flex;
+    flex-direction: column;
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border-left: 1px solid var(--glass-border);
+    border-right: 1px solid var(--glass-border);
+  }
+
+  @media (max-width: 800px) {
+    .app-container { max-width: 100%; max-height: 100vh; border: none; }
+  }
+
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    background: rgba(18, 18, 26, 0.8);
+    backdrop-filter: blur(10px);
+  }
+
+  .model-switch {
+    display: flex;
+    background: var(--bg-input);
+    border-radius: 12px;
+    padding: 3px;
+    gap: 2px;
+  }
+  .model-btn {
+    padding: 8px 18px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: transparent;
+    color: var(--text-secondary);
+    position: relative;
+  }
+  .model-btn.active-mimo {
+    background: var(--accent-mimo);
+    color: #fff;
+    box-shadow: 0 4px 15px var(--accent-mimo-glow);
+  }
+  .model-btn.active-ds {
+    background: var(--accent-ds);
+    color: #fff;
+    box-shadow: 0 4px 15px var(--accent-ds-glow);
+  }
+  .model-btn:hover:not(.active-mimo):not(.active-ds) {
+    color: var(--text-primary);
+    background: rgba(255,255,255,0.05);
+  }
+
+  .header-actions { display: flex; gap: 8px; }
+  .icon-btn {
+    width: 38px; height: 38px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+  .icon-btn:hover { color: var(--text-primary); border-color: rgba(255,255,255,0.2); background: var(--bg-input); }
+
+  .chat-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    scroll-behavior: smooth;
+  }
+  .chat-area::-webkit-scrollbar { width: 4px; }
+  .chat-area::-webkit-scrollbar-track { background: transparent; }
+  .chat-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .welcome-screen {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    text-align: center;
+    padding: 40px;
+  }
+  .welcome-icon {
+    width: 72px; height: 72px;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 36px;
+    transition: all 0.5s ease;
+  }
+  .welcome-icon.mimo { background: rgba(255,105,0,0.15); box-shadow: 0 0 40px var(--accent-mimo-glow); }
+  .welcome-icon.ds { background: rgba(59,130,246,0.15); box-shadow: 0 0 40px var(--accent-ds-glow); }
+  .welcome-title { font-size: 24px; font-weight: 700; }
+  .welcome-subtitle { color: var(--text-secondary); font-size: 14px; max-width: 360px; line-height: 1.6; }
+
+  .quick-prompts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 8px;
+  }
+  .quick-prompt {
+    padding: 10px 16px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .quick-prompt:hover { border-color: rgba(255,255,255,0.25); color: var(--text-primary); background: var(--bg-input); }
+
+  .msg-row {
+    display: flex;
+    gap: 10px;
+    animation: msgIn 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  @keyframes msgIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .msg-row.user { flex-direction: row-reverse; }
+  .msg-avatar {
+    width: 34px; height: 34px;
+    border-radius: 10px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .msg-avatar.ai { background: rgba(255,255,255,0.08); color: var(--text-secondary); }
+  .msg-avatar.ai.mimo-accent { background: rgba(255,105,0,0.2); color: var(--accent-mimo); }
+  .msg-avatar.ai.ds-accent { background: rgba(59,130,246,0.2); color: var(--accent-ds); }
+  .msg-avatar.user { background: rgba(255,255,255,0.1); color: var(--text-primary); }
+
+  .msg-bubble {
+    max-width: 75%;
+    padding: 12px 16px;
+    border-radius: 16px;
+    line-height: 1.65;
+    font-size: 14px;
+    word-break: break-word;
+  }
+  .msg-bubble.ai {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-top-left-radius: 4px;
+    color: var(--text-primary);
+  }
+  .msg-bubble.user {
+    border-top-right-radius: 4px;
+    color: #fff;
+  }
+  .msg-bubble.user.mimo-user { background: var(--accent-mimo); }
+  .msg-bubble.user.ds-user { background: var(--accent-ds); }
+
+  .msg-bubble pre {
+    background: rgba(0,0,0,0.4);
+    padding: 12px;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 8px 0;
+    font-size: 13px;
+  }
+  .msg-bubble code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px; }
+
+  .typing-indicator {
+    display: flex;
+    gap: 4px;
+    padding: 8px 0;
+  }
+  .typing-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--text-secondary);
+    animation: typingBounce 1.4s infinite;
+  }
+  .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes typingBounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    30% { transform: translateY(-6px); opacity: 1; }
+  }
+
+  .input-area {
+    padding: 14px 20px 20px;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+    background: rgba(18, 18, 26, 0.8);
+    backdrop-filter: blur(10px);
+  }
+  .input-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+  }
+  .input-wrapper {
+    flex: 1;
+    background: var(--bg-input);
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: flex-end;
+    padding: 6px 8px 6px 16px;
+    transition: border-color 0.2s;
+  }
+  .input-wrapper:focus-within { border-color: rgba(255,255,255,0.2); }
+  .input-wrapper textarea {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-family: inherit;
+    resize: none;
+    max-height: 120px;
+    padding: 6px 0;
+    line-height: 1.5;
+  }
+  .input-wrapper textarea::placeholder { color: var(--text-secondary); }
+
+  .send-btn {
+    width: 42px; height: 42px;
+    border-radius: 14px;
+    border: none;
+    cursor: pointer;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+    color: #fff;
+  }
+  .send-btn.mimo-send { background: var(--accent-mimo); box-shadow: 0 4px 15px var(--accent-mimo-glow); }
+  .send-btn.ds-send { background: var(--accent-ds); box-shadow: 0 4px 15px var(--accent-ds-glow); }
+  .send-btn:hover { transform: scale(1.05); }
+  .send-btn:active { transform: scale(0.95); }
+  .send-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  .send-btn.stop { background: #ef4444; }
+
+  /* ===== Modal / Settings Panel ===== */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(4px);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s ease;
+  }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .modal {
+    width: 90%;
+    max-width: 520px;
+    max-height: 85vh;
+    overflow-y: auto;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 24px;
+    animation: modalIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  @keyframes modalIn {
+    from { opacity: 0; transform: scale(0.95) translateY(10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .modal h3 {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .form-group { margin-bottom: 16px; }
+  .form-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+  .form-input {
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .form-input:focus { border-color: rgba(255,255,255,0.3); }
+  .form-hint {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    line-height: 1.5;
+  }
+  .form-hint code {
+    background: var(--bg-card);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+  }
+
+  .api-section {
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 16px;
+    border: 1px solid var(--border);
+  }
+  .api-section.mimo-section { background: rgba(255,105,0,0.05); border-color: rgba(255,105,0,0.2); }
+  .api-section.ds-section { background: rgba(59,130,246,0.05); border-color: rgba(59,130,246,0.2); }
+  .api-section-title {
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .api-status {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+  }
+  .api-status.set { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+  .api-status.unset { background: #f59e0b; box-shadow: 0 0 6px #f59e0b; }
+
+  .btn-row { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+  .btn {
+    padding: 10px 20px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.2s;
+    font-family: inherit;
+  }
+  .btn-primary { background: #fff; color: #000; }
+  .btn-primary:hover { opacity: 0.9; }
+  .btn-secondary { background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: rgba(255,255,255,0.25); }
+  .btn-danger { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+  .btn-danger:hover { background: rgba(239,68,68,0.25); }
+
+  .hidden { display: none !important; }
+
+  .char-count {
+    font-size: 11px;
+    color: var(--text-secondary);
+    padding: 6px 4px 0 0;
+  }
+
+  .toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 200;
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    animation: toastIn 0.3s ease, toastOut 0.3s ease 2.5s forwards;
+    pointer-events: none;
+  }
+  @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(-20px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+  @keyframes toastOut { from { opacity: 1; } to { opacity: 0; } }
+  .toast.success { background: #166534; color: #bbf7d0; border: 1px solid #22c55e; }
+  .toast.error { background: #7f1d1d; color: #fecaca; border: 1px solid #ef4444; }
+</style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+<div class="bg-orb mimo" id="orbMimo"></div>
+<div class="bg-orb ds" id="orbDs"></div>
+
+<div class="app-container">
+  <!-- Header -->
+  <div class="header">
+    <div class="model-switch" id="modelSwitch">
+      <button class="model-btn active-mimo" data-model="mimo" onclick="switchModel('mimo')">
+        🟠 MiMo
+      </button>
+      <button class="model-btn" data-model="deepseek" onclick="switchModel('deepseek')">
+        🔵 DeepSeek V4
+      </button>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" onclick="toggleSettings()" title="API 设置">⚙️</button>
+      <button class="icon-btn" onclick="clearChat()" title="清空对话">🗑️</button>
+    </div>
+  </div>
+
+  <!-- Chat Area -->
+  <div class="chat-area" id="chatArea">
+    <div class="welcome-screen" id="welcomeScreen">
+      <div class="welcome-icon mimo" id="welcomeIcon">🤖</div>
+      <div class="welcome-title" id="welcomeTitle">你好，我是 MiMo</div>
+      <div class="welcome-subtitle" id="welcomeSubtitle">
+        由小米公司出品的 AI 模型。点击下方快捷提示开始对话，或在底部输入你的问题。
+      </div>
+      <div class="quick-prompts" id="quickPrompts">
+        <div class="quick-prompt" onclick="sendQuick('帮我写一首关于未来的诗')">✨ 帮我写一首诗</div>
+        <div class="quick-prompt" onclick="sendQuick('解释一下人工智能的原理')">🧠 解释AI原理</div>
+        <div class="quick-prompt" onclick="sendQuick('推荐几本必读的书籍')">📚 推荐几本书</div>
+        <div class="quick-prompt" onclick="sendQuick('帮我优化一段代码')">💻 优化一段代码</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Input Area -->
+  <div class="input-area">
+    <div class="input-row">
+      <div class="input-wrapper">
+        <textarea
+          id="userInput"
+          rows="1"
+          placeholder="输入你的问题..."
+          onkeydown="handleKeyDown(event)"
+          oninput="autoResize(this)"
+        ></textarea>
+        <span class="char-count" id="charCount"></span>
+      </div>
+      <button class="send-btn mimo-send" id="sendBtn" onclick="sendMessage()" title="发送">
+        ➤
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay hidden" id="settingsModal">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h3>⚙️ API 配置 & 设置</h3>
+
+    <!--
+    ╔══════════════════════════════════════════════════════╗
+    ║  🔑 API 配置区域 - 在这里修改 API Key 和接口地址   ║
+    ╚══════════════════════════════════════════════════════╝
+    -->
+
+    <!-- ===== DeepSeek API 配置 ===== -->
+    <div class="api-section ds-section">
+      <div class="api-section-title">
+        🔵 DeepSeek V4 Pro
+        <span class="api-status set" id="dsStatus"></span>
+        <span style="font-size:11px;color:var(--text-secondary);margin-left:auto;">已配置 ✅</span>
+      </div>
+      <!-- 🔑 修改处 1: DeepSeek API Key -->
+      <div class="form-group">
+        <label class="form-label">API Key</label>
+        <input class="form-input" type="password" id="dsApiKey" placeholder="sk-..." onchange="saveConfig()">
+        <div class="form-hint">
+          在 <code>ai-chat.html</code> 中搜索 <code>🔑 修改处 1</code> 可快速定位
+        </div>
+      </div>
+      <!-- 🔑 修改处 2: DeepSeek API Endpoint -->
+      <div class="form-group">
+        <label class="form-label">API Endpoint</label>
+        <input class="form-input" id="dsEndpoint" placeholder="https://api.deepseek.com/chat/completions" onchange="saveConfig()">
+      </div>
+      <!-- 🔑 修改处 3: DeepSeek 模型名称 -->
+      <div class="form-group">
+        <label class="form-label">模型名称 (Model)</label>
+        <input class="form-input" id="dsModel" placeholder="deepseek-chat" onchange="saveConfig()">
+      </div>
+    </div>
+
+    <!-- ===== MiMo API 配置 ===== -->
+    <div class="api-section mimo-section">
+      <div class="api-section-title">
+        🟠 MiMo (小米)
+        <span class="api-status unset" id="mimoStatus"></span>
+        <span style="font-size:11px;color:var(--text-secondary);margin-left:auto;">待配置 ⚠️</span>
+      </div>
+      <!-- 🔑 修改处 4: MiMo API Key -->
+      <div class="form-group">
+        <label class="form-label">API Key</label>
+        <input class="form-input" type="password" id="mimoApiKey" placeholder="你的 MiMo API Key..." onchange="saveConfig()">
+        <div class="form-hint">
+          ⚠️ 小米 MiMo API Key 尚未获取，请后续填入。<br>
+          在 <code>ai-chat.html</code> 中搜索 <code>🔑 修改处 4</code> 可快速定位
+        </div>
+      </div>
+      <!-- 🔑 修改处 5: MiMo API Endpoint -->
+      <div class="form-group">
+        <label class="form-label">API Endpoint</label>
+        <input class="form-input" id="mimoEndpoint" placeholder="https://api.mimo.xiaomi.com/v1/chat/completions" onchange="saveConfig()">
+        <div class="form-hint">
+          ⚠️ MiMo 的 API 地址目前为占位符，请替换为实际地址
+        </div>
+      </div>
+      <!-- 🔑 修改处 6: MiMo 模型名称 -->
+      <div class="form-group">
+        <label class="form-label">模型名称 (Model)</label>
+        <input class="form-input" id="mimoModel" placeholder="mimo-chat" onchange="saveConfig()">
+      </div>
+    </div>
+
+    <!-- 网络设置 -->
+    <div class="api-section" style="background:rgba(255,255,255,0.02);">
+      <div class="api-section-title">🔗 网络设置</div>
+      <!-- 🔑 修改处 7: 代理设置 -->
+      <div class="form-group" style="display:flex;align-items:center;gap:10px;">
+        <input type="checkbox" id="useProxy" onchange="saveConfig()" style="accent-color:#3b82f6;width:18px;height:18px;">
+        <label for="useProxy" style="font-size:13px;color:var(--text-primary);cursor:pointer;">使用本地代理（推荐，解决跨域问题）</label>
+      </div>
+      <div class="form-hint" style="margin-bottom:8px;">
+        浏览器的安全策略会阻止直接调用 AI API。勾选此项后通过本地 <code>proxy-server.js</code> 转发请求。
+      </div>
+      <div class="form-group">
+        <label class="form-label">代理地址</label>
+        <input class="form-input" id="proxyUrl" placeholder="http://localhost:8080/api/proxy" onchange="saveConfig()">
+      </div>
+    </div>
+
+    <!-- 用户设置 -->
+    <div class="form-group">
+      <label class="form-label">你的名字</label>
+      <input class="form-input" id="userName" placeholder="输入你的名字" onchange="saveConfig()">
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="saveConfig();toggleSettings()">✅ 保存并关闭</button>
+      <button class="btn btn-danger" onclick="resetConfig()">🔄 恢复默认</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ╔══════════════════════════════════════════════════════════╗
+// ║  🔑 API 默认配置 - 如果你不想用 UI 面板，直接改这里    ║
+// ╚══════════════════════════════════════════════════════════╝
+
+const DEFAULT_CONFIG = {
+  // ========== 🔑 修改处 1: DeepSeek API Key ==========
+  dsApiKey: '', // ← 把你的 DeepSeek API Key 填在这里，格式: 'sk-xxxxxxxx'
+
+  // ========== 🔑 修改处 2: DeepSeek API Endpoint ==========
+  dsEndpoint: 'https://api.deepseek.com/chat/completions',
+
+  // ========== 🔑 修改处 3: DeepSeek 模型名称 ==========
+  dsModel: 'deepseek-chat',
+
+  // ========== 🔑 修改处 4: MiMo API Key ==========
+  mimoApiKey: '', // ← 等拿到 MiMo 的 API Key 后填在这里
+
+  // ========== 🔑 修改处 5: MiMo API Endpoint ==========
+  mimoEndpoint: 'https://api.mimo.xiaomi.com/v1/chat/completions', // ← 替换为 MiMo 实际地址
+
+  // ========== 🔑 修改处 6: MiMo 模型名称 ==========
+  mimoModel: 'mimo-chat', // ← 替换为 MiMo 实际模型名
+
+  // ========== 🔑 修改处 7: 代理服务器地址（解决浏览器跨域问题）==========
+  useProxy: true, // ← 改为 false 可尝试直连 API（可能被 CORS 拦截）
+  proxyUrl: (function() {
+    if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      return '/api/proxy';
+    }
+    return 'http://localhost:8080/api/proxy';
+  })(),
+
+  // 用户设置
+  userName: '',
+  currentModel: 'mimo'
+};
+
+// ============================================================
+
+let config = { ...DEFAULT_CONFIG };
+let messages = [];
+let currentModel = 'mimo';
+let abortController = null;
+
+// ===== 初始化 =====
+function init() {
+  loadConfig();
+  currentModel = config.currentModel || 'mimo';
+  updateModelUI();
+  updateSettingsForm();
+  updateWelcomeScreen();
+
+  const input = document.getElementById('userInput');
+  input.focus();
+}
+
+function loadConfig() {
+  const isRemote = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+  try {
+    const saved = localStorage.getItem('aiChatConfig');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      config = { ...DEFAULT_CONFIG, ...parsed };
+      if (config.proxyUrl === 'http://localhost:3456') {
+        config.proxyUrl = isRemote ? '/api/proxy' : 'http://localhost:8080/api/proxy';
+        localStorage.setItem('aiChatConfig', JSON.stringify(config));
+      }
+      if (isRemote && config.proxyUrl && config.proxyUrl.includes('localhost')) {
+        config.proxyUrl = '/api/proxy';
+        localStorage.setItem('aiChatConfig', JSON.stringify(config));
+      }
+    }
+  } catch(e) {}
+}
+
+function saveConfig() {
+  config.dsApiKey = document.getElementById('dsApiKey').value;
+  config.dsEndpoint = document.getElementById('dsEndpoint').value;
+  config.dsModel = document.getElementById('dsModel').value;
+  config.mimoApiKey = document.getElementById('mimoApiKey').value;
+  config.mimoEndpoint = document.getElementById('mimoEndpoint').value;
+  config.mimoModel = document.getElementById('mimoModel').value;
+  config.useProxy = document.getElementById('useProxy').checked;
+  config.proxyUrl = document.getElementById('proxyUrl').value;
+  config.userName = document.getElementById('userName').value;
+  config.currentModel = currentModel;
+  localStorage.setItem('aiChatConfig', JSON.stringify(config));
+  updateModelUI();
+  showToast('配置已保存 ✅', 'success');
+}
+
+function resetConfig() {
+  if (confirm('确定要恢复为默认配置吗？这会清空所有 API Key 和设置。')) {
+    config = { ...DEFAULT_CONFIG };
+    localStorage.removeItem('aiChatConfig');
+    messages = [];
+    updateSettingsForm();
+    updateModelUI();
+    updateWelcomeScreen();
+    renderMessages();
+    showToast('已恢复默认配置', 'success');
+  }
+}
+
+function updateSettingsForm() {
+  document.getElementById('dsApiKey').value = config.dsApiKey || '';
+  document.getElementById('dsEndpoint').value = config.dsEndpoint || '';
+  document.getElementById('dsModel').value = config.dsModel || '';
+  document.getElementById('mimoApiKey').value = config.mimoApiKey || '';
+  document.getElementById('mimoEndpoint').value = config.mimoEndpoint || '';
+  document.getElementById('mimoModel').value = config.mimoModel || '';
+  document.getElementById('useProxy').checked = config.useProxy !== false;
+  document.getElementById('proxyUrl').value = config.proxyUrl || 'http://localhost:3456';
+  document.getElementById('userName').value = config.userName || '';
+
+  const dsStatus = document.getElementById('dsStatus');
+  const mimoStatus = document.getElementById('mimoStatus');
+  if (config.dsApiKey) { dsStatus.className = 'api-status set'; }
+  else { dsStatus.className = 'api-status unset'; }
+  if (config.mimoApiKey) { mimoStatus.className = 'api-status set'; }
+  else { mimoStatus.className = 'api-status unset'; }
+}
+
+// ===== 模型切换 =====
+function switchModel(model) {
+  currentModel = model;
+  config.currentModel = model;
+  localStorage.setItem('aiChatConfig', JSON.stringify(config));
+  updateModelUI();
+  updateWelcomeScreen();
+  document.getElementById('userInput').focus();
+}
+
+function updateModelUI() {
+  const model = currentModel;
+  const btns = document.querySelectorAll('.model-btn');
+  btns.forEach(b => {
+    b.className = 'model-btn';
+    if (b.dataset.model === model) {
+      b.className += model === 'mimo' ? ' active-mimo' : ' active-ds';
+    }
+  });
+
+  const sendBtn = document.getElementById('sendBtn');
+  sendBtn.className = 'send-btn ' + (model === 'mimo' ? 'mimo-send' : 'ds-send');
+
+  const orbs = { mimo: document.getElementById('orbMimo'), ds: document.getElementById('orbDs') };
+  orbs.mimo.style.opacity = model === 'mimo' ? '0.2' : '0.06';
+  orbs.ds.style.opacity = model === 'deepseek' ? '0.2' : '0.06';
+}
+
+function updateWelcomeScreen() {
+  const welcomeScreen = document.getElementById('welcomeScreen');
+  if (!welcomeScreen) return;
+  const icon = document.getElementById('welcomeIcon');
+  const title = document.getElementById('welcomeTitle');
+  const subtitle = document.getElementById('welcomeSubtitle');
+
+  if (messages.length > 0) {
+    welcomeScreen.classList.add('hidden');
+  } else {
+    welcomeScreen.classList.remove('hidden');
+  }
+
+  if (currentModel === 'mimo') {
+    icon.textContent = '🤖';
+    icon.className = 'welcome-icon mimo';
+    title.textContent = '你好，我是 MiMo';
+    subtitle.textContent = '由小米公司出品的 AI 模型。点击下方快捷提示开始对话，或在底部输入你的问题。';
+  } else {
+    icon.textContent = '🧠';
+    icon.className = 'welcome-icon ds';
+    title.textContent = '你好，我是 DeepSeek V4';
+    subtitle.textContent = '深度求索出品的 AI 模型。点击下方快捷提示开始对话，或在底部输入你的问题。';
+  }
+}
+
+// ===== 消息渲染 =====
+function renderMessages() {
+  const chatArea = document.getElementById('chatArea');
+  const welcomeScreen = document.getElementById('welcomeScreen');
+
+  let html = '';
+  messages.forEach(msg => {
+    const isUser = msg.role === 'user';
+    const modelClass = msg.model === 'mimo' ? 'mimo-accent mimo-user' : 'ds-accent ds-user';
+    const avatarClass = isUser ? 'user' : ('ai ' + (msg.model === 'mimo' ? 'mimo-accent' : 'ds-accent'));
+    const avatarText = isUser ? (config.userName ? config.userName[0] : '我') : (msg.model === 'mimo' ? 'M' : 'D');
+    const bubbleClass = isUser ? ('user ' + (msg.model === 'mimo' ? 'mimo-user' : 'ds-user')) : 'ai';
+    const modelLabel = isUser ? '' : `<div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;font-weight:600;">${msg.model === 'mimo' ? 'MiMo' : 'DeepSeek V4'}</div>`;
+    const content = formatContent(msg.content);
+    html += `
+      <div class="msg-row ${isUser ? 'user' : ''}">
+        <div class="msg-avatar ${avatarClass}">${avatarText}</div>
+        <div class="msg-bubble ${bubbleClass}">
+          ${modelLabel}
+          ${content}
+        </div>
+      </div>
+    `;
+  });
+
+  chatArea.innerHTML = html;
+  if (messages.length === 0 && welcomeScreen) {
+    chatArea.innerHTML = '';
+    chatArea.appendChild(welcomeScreen);
+    welcomeScreen.classList.remove('hidden');
+    updateWelcomeScreen();
+  } else if (messages.length === 0 && !welcomeScreen) {
+    chatArea.innerHTML = `
+      <div class="welcome-screen" id="welcomeScreen">
+        <div class="welcome-icon ${currentModel}" id="welcomeIcon">${currentModel === 'mimo' ? '🤖' : '🧠'}</div>
+        <div class="welcome-title" id="welcomeTitle">你好，我是 ${currentModel === 'mimo' ? 'MiMo' : 'DeepSeek V4'}</div>
+        <div class="welcome-subtitle" id="welcomeSubtitle">
+          ${currentModel === 'mimo' ? '由小米公司出品的 AI 模型。' : '深度求索出品的 AI 模型。'}点击下方快捷提示开始对话，或在底部输入你的问题。
+        </div>
+        <div class="quick-prompts" id="quickPrompts">
+          <div class="quick-prompt" onclick="sendQuick('帮我写一首关于未来的诗')">✨ 帮我写一首诗</div>
+          <div class="quick-prompt" onclick="sendQuick('解释一下人工智能的原理')">🧠 解释AI原理</div>
+          <div class="quick-prompt" onclick="sendQuick('推荐几本必读的书籍')">📚 推荐几本书</div>
+          <div class="quick-prompt" onclick="sendQuick('帮我优化一段代码')">💻 优化一段代码</div>
+        </div>
+      </div>
+    `;
+  }
+  chatArea.scrollTop = chatArea.scrollHeight;
+}
+
+function formatContent(text) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/```(\w*)\n?([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\n/g, '<br>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>');
+}
+
+// ===== 发送消息 =====
+async function sendMessage() {
+  const input = document.getElementById('userInput');
+  const content = input.value.trim();
+  if (!content) return;
+
+  if (currentModel === 'mimo' && !config.mimoApiKey) {
+    showToast('⚠️ 请先在设置中配置 MiMo 的 API Key', 'error');
+    toggleSettings();
+    return;
+  }
+  if (currentModel === 'deepseek' && !config.dsApiKey) {
+    showToast('⚠️ 请先在设置中配置 DeepSeek 的 API Key', 'error');
+    toggleSettings();
+    return;
+  }
+
+  input.value = '';
+  input.style.height = 'auto';
+  document.getElementById('charCount').textContent = '';
+
+  messages.push({ role: 'user', content, model: currentModel });
+  const welcome = document.getElementById('welcomeScreen');
+  if (welcome) welcome.classList.add('hidden');
+  renderMessages();
+
+  // 添加 AI 消息占位
+  messages.push({ role: 'assistant', content: '', model: currentModel });
+  renderMessages();
+  setInputEnabled(false);
+  showTyping();
+
+  try {
+    abortController = new AbortController();
+
+    let apiKey, endpoint, modelName;
+    if (currentModel === 'mimo') {
+      apiKey = config.mimoApiKey;
+      endpoint = config.mimoEndpoint;
+      modelName = config.mimoModel;
+    } else {
+      apiKey = config.dsApiKey;
+      endpoint = config.dsEndpoint;
+      modelName = config.dsModel;
+    }
+
+    const apiMessages = [
+      { role: 'system', content: `你是${currentModel === 'mimo' ? 'MiMo' : 'DeepSeek V4'}，一个智能AI助手。${config.userName ? '用户的名字是' + config.userName + '。' : ''}请用中文回答，保持友好、专业的语气。` },
+      ...messages.slice(0, -1).filter(m => m.content).map(m => ({
+        role: m.role,
+        content: m.content
+      }))
+    ];
+
+    const requestPayload = JSON.stringify({
+      model: modelName,
+      messages: apiMessages,
+      stream: false
+    });
+
+    let fetchUrl, fetchOptions;
+
+    if (config.useProxy) {
+      fetchUrl = config.proxyUrl;
+      fetchOptions = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetUrl: endpoint,
+          apiKey: apiKey,
+          body: requestPayload
+        }),
+        signal: abortController.signal
+      };
+    } else {
+      fetchUrl = endpoint;
+      fetchOptions = {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: requestPayload,
+        signal: abortController.signal
+      };
+    }
+
+    console.log('📤 发送请求:', { endpoint, modelName, msgCount: apiMessages.length });
+
+    const response = await fetch(fetchUrl, fetchOptions);
+
+    console.log('📥 响应状态:', response.status);
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error('❌ API 返回错误:', errText);
+      let errMsg = `API 请求失败 (${response.status})`;
+      try {
+        const errJson = JSON.parse(errText);
+        errMsg += ': ' + (errJson.error?.message || errJson.message || errText);
+      } catch {
+        errMsg += ': ' + errText.substring(0, 300);
+      }
+      throw new Error(errMsg);
+    }
+
+    const data = await response.json();
+    console.log('✅ API 返回:', JSON.stringify(data).substring(0, 300));
+
+    if (data.error) {
+      const errMsg = data.error.message || data.error.code || JSON.stringify(data.error);
+      throw new Error('API 错误: ' + errMsg);
+    }
+
+    let reply = '';
+    if (data.choices && data.choices[0]) {
+      const choice = data.choices[0];
+      if (choice.message) {
+        reply = choice.message.content || '';
+        if (choice.message.reasoning_content) {
+          reply = '【思考过程】\n' + choice.message.reasoning_content + '\n\n【回答】\n' + reply;
+        }
+      } else if (choice.content) {
+        reply = choice.content;
+      } else if (choice.text) {
+        reply = choice.text;
+      }
+    } else if (data.content) {
+      reply = data.content;
+    } else if (data.output) {
+      if (Array.isArray(data.output)) {
+        reply = data.output.map(item => {
+          if (item.type === 'message' && item.content) {
+            return item.content.map(c => c.output_text || c.text || '').join('');
+          }
+          if (item.text) return item.text;
+          return '';
+        }).join('');
+      } else if (typeof data.output === 'object') {
+        reply = data.output.content || data.output.text || JSON.stringify(data.output);
+      } else {
+        reply = String(data.output);
+      }
+    } else if (data.result) {
+      reply = typeof data.result === 'string' ? data.result : JSON.stringify(data.result);
+    } else if (data.response) {
+      reply = typeof data.response === 'string' ? data.response : data.response.content || JSON.stringify(data.response);
+    } else {
+      reply = JSON.stringify(data, null, 2);
+    }
+
+    if (!reply) {
+      reply = '⚠️ 模型返回了空内容，请重试';
+    }
+
+    const lastMsg = messages[messages.length - 1];
+    lastMsg.content = reply;
+  } catch (err) {
+    console.error('💥 发送失败:', err);
+    const lastMsg = messages[messages.length - 1];
+    if (err.name === 'AbortError') {
+      lastMsg.content = lastMsg.content || '⏹️ 已停止生成';
+    } else if (err.message.includes('Failed to fetch') && config.useProxy) {
+      lastMsg.content = `❌ 无法连接到本地代理服务器 (${config.proxyUrl})\n\n📌 请先运行: node proxy-server.js\n📌 或双击 "启动AI网站.bat"`;
+    } else {
+      lastMsg.content = `❌ 出错了: ${err.message}\n\n💡 按 F12 打开控制台查看详细日志`;
+    }
+  } finally {
+    abortController = null;
+    hideTyping();
+    renderMessages();
+    setInputEnabled(true);
+    document.getElementById('userInput').focus();
+  }
+}
+
+function stopGeneration() {
+  if (abortController) {
+    abortController.abort();
+  }
+}
+
+function sendQuick(text) {
+  document.getElementById('userInput').value = text;
+  sendMessage();
+}
+
+// ===== 输入处理 =====
+function handleKeyDown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  document.getElementById('charCount').textContent = el.value.length > 0 ? el.value.length : '';
+}
+
+function setInputEnabled(enabled) {
+  const input = document.getElementById('userInput');
+  const sendBtn = document.getElementById('sendBtn');
+
+  if (enabled) {
+    input.disabled = false;
+    sendBtn.disabled = false;
+    sendBtn.textContent = '➤';
+    sendBtn.className = 'send-btn ' + (currentModel === 'mimo' ? 'mimo-send' : 'ds-send');
+    sendBtn.onclick = sendMessage;
+  } else {
+    input.disabled = true;
+    sendBtn.textContent = '■';
+    sendBtn.className = 'send-btn stop';
+    sendBtn.onclick = stopGeneration;
+  }
+}
+
+// ===== 打字动画 =====
+function showTyping() {
+  const chatArea = document.getElementById('chatArea');
+  const lastBubble = chatArea.querySelector('.msg-row:last-child .msg-bubble.ai');
+  if (lastBubble) {
+    lastBubble.innerHTML += '<div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>';
+  }
+}
+
+function hideTyping() {
+  const indicators = document.querySelectorAll('.typing-indicator');
+  indicators.forEach(el => el.remove());
+}
+
+// ===== 设置面板 =====
+function toggleSettings() {
+  const modal = document.getElementById('settingsModal');
+  if (modal.classList.contains('hidden')) {
+    updateSettingsForm();
+    modal.classList.remove('hidden');
+  } else {
+    modal.classList.add('hidden');
+  }
+}
+
+document.addEventListener('click', function(e) {
+  const modal = document.getElementById('settingsModal');
+  if (!modal.classList.contains('hidden') && e.target === modal) {
+    modal.classList.add('hidden');
+  }
+});
+
+// ===== 清空对话 =====
+function clearChat() {
+  if (messages.length === 0) return;
+  if (confirm('确定要清空当前对话吗？')) {
+    messages = [];
+    renderMessages();
+    updateWelcomeScreen();
+    showToast('对话已清空', 'success');
+  }
+}
+
+// ===== Toast =====
+function showToast(msg, type) {
+  const existing = document.querySelector('.toast');
+  if (existing) existing.remove();
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
+}
+
+// ===== 启动 =====
+init();
+</script>
+
+</body>
+</html>
