@@ -1,6 +1,8 @@
 {
-  "cleanUrls": true,
-  "rewrites": [
-    { "source": "/", "destination": "/ai-chat.html" }
-  ]
+  "functions": {
+    "api/proxy.js": {
+      "memory": 512,
+      "maxDuration": 30
+    }
+  }
 }
