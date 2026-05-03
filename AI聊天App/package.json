@@ -1,0 +1,12 @@
+{
+	"name": "AI聊天",
+	"version": "1.0.0",
+	"main": "main.js",
+	"scripts": {
+		"dev": "echo 'please use HBuilderX to run this project'",
+		"build": "echo 'please use HBuilderX to build this project'"
+	},
+	"dependencies": {},
+	"devDependencies": {},
+	"uni-app": {}
+}

@@ -1,0 +1,16 @@
+{
+	"pages": [
+		{
+			"path": "pages/index/index",
+			"style": {
+				"navigationBarTitleText": "AI聊天"
+			}
+		}
+	],
+	"globalStyle": {
+		"navigationBarTextStyle": "white",
+		"navigationBarTitleText": "AI聊天",
+		"navigationBarBackgroundColor": "#667eea",
+		"backgroundColor": "#F8F8F8"
+	}
+}
